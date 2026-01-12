@@ -1,5 +1,5 @@
 """
-ASGI config for chatgpt_clone project.
+ASGI configration for chatgpt_clone project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
 
