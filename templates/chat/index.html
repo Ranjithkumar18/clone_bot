@@ -223,23 +223,6 @@
             white-space: nowrap;
         }
 
-        .upgrade-button {
-            background: #565869;
-            border: none;
-            border-radius: 6px;
-            padding: 0.5rem 0.75rem;
-            color: #ececf1;
-            font-size: 0.75rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s;
-            white-space: nowrap;
-        }
-
-        .upgrade-button:hover {
-            background: #6e6e80;
-        }
-
         /* Main Content Area */
         .main-content {
             flex: 1;
@@ -730,7 +713,6 @@
                 <div class="user-info">
                     <div class="user-name" id="userName">{{ user.username }}</div>
                 </div>
-                <button class="upgrade-button">Upgrade</button>
             </div>
         </div>
     </div>
@@ -872,10 +854,39 @@
             return message.length > maxLength ? message.substring(0, maxLength) + '...' : message;
         }
 
+        // Clear documents for a chat
+        async function clearChatDocuments(chatId) {
+            if (!chatId) return;
+            try {
+                await fetch('/api/documents/clear-chat/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
+                    body: JSON.stringify({ chat_id: chatId })
+                });
+            } catch (error) {
+                console.error('Error clearing chat documents:', error);
+            }
+        }
+
         // Create new chat
-        function createNewChat() {
+        async function createNewChat() {
+            // Clear documents for the previous chat if it existed
+            if (currentChatId) {
+                await clearChatDocuments(currentChatId);
+            }
+            
             currentChatId = generateChatId();
             conversationHistory = [];
+            
+            // Clear local document state
+            activeDocuments = [];
+            documents = [];
+            currentDocumentId = null;
+            updateUploadButtonState();
+            
             chatContainer.innerHTML = '<div class="message ai-message"><div class="message-avatar ai-avatar">AI</div><div class="message-content">Hello! I\'m your AI assistant. How can I help you today?</div></div>';
             messageInput.value = '';
             messageInput.focus();
@@ -885,6 +896,11 @@
         // Load chat from database
         async function loadChat(chatId) {
             try {
+                // Clear documents for the previous chat if switching chats
+                if (currentChatId && currentChatId !== chatId) {
+                    await clearChatDocuments(currentChatId);
+                }
+                
                 // Show loading state
                 chatContainer.innerHTML = '<div class="message ai-message"><div class="message-avatar ai-avatar">AI</div><div class="message-content">Loading conversation...</div></div>';
                 
@@ -906,6 +922,12 @@
                     const chat = data.chat;
                     currentChatId = chat.id;
                     conversationHistory = chat.history || [];
+                    
+                    // Clear local document state when loading a different chat
+                    activeDocuments = [];
+                    documents = [];
+                    currentDocumentId = null;
+                    updateUploadButtonState();
                     
                     // Render messages
                     chatContainer.innerHTML = '';
@@ -1512,6 +1534,10 @@
             try {
                 const formData = new FormData();
                 formData.append('file', file);
+                // Send current chat_id so documents are associated with this chat
+                if (currentChatId) {
+                    formData.append('chat_id', currentChatId);
+                }
 
                 const response = await fetch('/api/documents/upload/', {
                     method: 'POST',

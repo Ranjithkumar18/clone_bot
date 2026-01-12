@@ -3,23 +3,22 @@ Document processing utilities for extracting text from various file formats
 """
 import os
 import mimetypes
-import tempfile
 from pathlib import Path
 from io import BytesIO
 
 def extract_text_from_file(file_input, file_type):
     """
     Extract text from various file formats
-    
+
     Args:
         file_input: File object (Django UploadedFile) or file path
         file_type: MIME type or file extension
-    
+
     Returns:
         Extracted text as string (empty string if extraction fails)
     """
     text = ""
-    
+
     # Determine file extension from filename or file_input
     if hasattr(file_input, 'name'):
         filename = file_input.name
@@ -29,28 +28,32 @@ def extract_text_from_file(file_input, file_type):
         file_ext = Path(file_input).suffix.lower()
     else:
         file_ext = ''
-    
+
     try:
         # PDF files
         if file_ext == '.pdf' or 'pdf' in file_type.lower():
             text = extract_from_pdf(file_input)
-        
+
         # Word documents
-        elif file_ext in ['.docx', '.doc'] or 'word' in file_type.lower() or 'document' in file_type.lower():
+        elif (file_ext in ['.docx', '.doc'] or
+              'word' in file_type.lower() or
+              'document' in file_type.lower()):
             text = extract_from_docx(file_input)
-        
+
         # Excel files
-        elif file_ext in ['.xlsx', '.xls'] or 'excel' in file_type.lower() or 'spreadsheet' in file_type.lower():
+        elif (file_ext in ['.xlsx', '.xls'] or
+              'excel' in file_type.lower() or
+              'spreadsheet' in file_type.lower()):
             text = extract_from_excel(file_input)
-        
+
         # Text files
         elif file_ext in ['.txt', '.md', '.csv'] or 'text' in file_type.lower():
             text = extract_from_text(file_input)
-        
+
         # Images (basic OCR would require additional libraries like pytesseract)
         elif file_ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp'] or 'image' in file_type.lower():
             text = extract_from_image(file_input)
-        
+
         else:
             # Try to read as text as fallback
             if hasattr(file_input, 'read'):
@@ -61,26 +64,26 @@ def extract_text_from_file(file_input, file_type):
                         text = content.decode('utf-8', errors='ignore')
                     else:
                         text = content
-                except:
+                except Exception:
                     text = ""
-    
+
     except Exception as e:
         # Return empty string on error, log the error instead
         import logging
-        logging.error(f"Error processing file: {str(e)}")
+        logging.error("Error processing file: %s", str(e))
         text = ""
-    
+
     # Clean up the text - remove error messages that might have been returned
     if text and (text.startswith("Error") or text.startswith("Unable to")):
         text = ""
-    
+
     return text.strip() if text else ""
 
 def extract_from_pdf(file_input):
     """Extract text from PDF file using multiple methods for better compatibility.
     Prioritizes PyMuPDF (fitz) as it's most robust for various PDF types."""
     text = ""
-    
+
     # Get file content as bytes
     if hasattr(file_input, 'read'):
         file_input.seek(0)
@@ -89,14 +92,13 @@ def extract_from_pdf(file_input):
     else:
         with open(file_input, 'rb') as f:
             file_content = f.read()
-    
+
     # Method 1: Try PyMuPDF (fitz) FIRST - most robust, handles most PDF types
     try:
         import fitz  # PyMuPDF
         text = ""
         doc = fitz.open(stream=file_content, filetype="pdf")
-        for page_num in range(len(doc)):
-            page = doc[page_num]
+        for page in doc:
             page_text = page.get_text()
             if page_text and page_text.strip():
                 text += page_text + "\n"
@@ -105,7 +107,7 @@ def extract_from_pdf(file_input):
             return text.strip()
     except (ImportError, Exception):
         pass
-    
+
     # Method 2: Try pdfplumber (better for complex PDFs and tables)
     try:
         import pdfplumber
@@ -119,7 +121,7 @@ def extract_from_pdf(file_input):
             return text.strip()
     except (ImportError, Exception):
         pass
-    
+
     # Method 3: Try PyPDF2/pypdf as fallback
     try:
         try:
@@ -140,12 +142,12 @@ def extract_from_pdf(file_input):
                         text += page_text + "\n"
             except ImportError:
                 pass
-        
+
         if text.strip():
             return text.strip()
     except Exception:
         pass
-    
+
     # If all methods fail, return empty string (not an error message)
     return ""
 
@@ -160,7 +162,7 @@ def extract_from_docx(file_input):
             doc = Document(file_input)
         text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
         return text.strip()
-    except Exception as e:
+    except Exception:
         return ""
 
 def extract_from_excel(file_input):
@@ -181,7 +183,7 @@ def extract_from_excel(file_input):
                 if row_text.strip():
                     text += row_text + "\n"
         return text.strip()
-    except Exception as e:
+    except Exception:
         return ""
 
 def extract_from_text(file_input):
@@ -198,8 +200,7 @@ def extract_from_text(file_input):
                     except (UnicodeDecodeError, UnicodeError):
                         continue
                 return ""
-            else:
-                return content.strip()
+            return content.strip()
         else:
             encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
             for encoding in encodings:
@@ -209,13 +210,17 @@ def extract_from_text(file_input):
                 except (UnicodeDecodeError, UnicodeError):
                     continue
             return ""
-    except Exception as e:
+    except Exception:
         return ""
 
 def extract_from_image(file_input):
     """Extract text from image (placeholder - would need OCR library)"""
     filename = file_input.name if hasattr(file_input, 'name') else str(file_input)
-    return f"Image file detected: {os.path.basename(filename)}. OCR functionality requires additional setup (pytesseract). Please provide text-based documents for now."
+    return (
+        f"Image file detected: {os.path.basename(filename)}. "
+        f"OCR functionality requires additional setup (pytesseract). "
+        f"Please provide text-based documents for now."
+    )
 
 def get_file_type(file_path):
     """Get MIME type of file"""
