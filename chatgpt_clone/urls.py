@@ -1,5 +1,3 @@
-url
-
 """
 URL configuration for chatgpt_clone project.
 

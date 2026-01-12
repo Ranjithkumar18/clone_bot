@@ -1,5 +1,3 @@
-wsgi
-
 """
 WSGI config for chatgpt_clone project.
 
